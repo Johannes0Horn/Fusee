@@ -28,5 +28,11 @@ namespace Fusee.Serialization
         /// </summary>
         [ProtoMember(3, AsReference = true)]
         public List<SceneNodeContainer> Children;
-     }
+
+        /// <summary>
+        /// Check if visible.
+        /// </summary>
+        [ProtoMember(4)]
+        public bool Visible = true;
+    }
 }

@@ -56,13 +56,13 @@ namespace Fusee.Xene
         [JSExternal]
         public static VisitComponentMethod MakeComponentVisitor(MethodInfo info)
         {
-            return delegate(SceneVisitor visitor, SceneComponentContainer component) { info.Invoke(visitor, new object[] { component }); };
+            return delegate (SceneVisitor visitor, SceneComponentContainer component) { info.Invoke(visitor, new object[] { component }); };
         }
 
         [JSExternal]
         public static VisitNodeMethod MakeNodeVistor(MethodInfo info)
         {
-            return delegate(SceneVisitor visitor, SceneNodeContainer node) { info.Invoke(visitor, new object[] { node }); };
+            return delegate (SceneVisitor visitor, SceneNodeContainer node) { info.Invoke(visitor, new object[] { node }); };
         }
 
     }
@@ -92,7 +92,7 @@ namespace Fusee.Xene
             public Dictionary<Type, VisitComponentMethod> Components = new Dictionary<Type, VisitComponentMethod>();
         }
 
- 
+
         // The list of visitor methods defined in a concrete child class of SceneVisitor
         private VisitorSet _visitors;
 
@@ -224,7 +224,7 @@ namespace Fusee.Xene
         /// <value>
         ///   <c>true</c> if the current enumeration should yield; otherwise, <c>false</c>.
         /// </value>
-        protected bool YieldEnumeration {get { return YieldOnCurrentComponent || YieldOnCurrentNode; }}
+        protected bool YieldEnumeration { get { return YieldOnCurrentComponent || YieldOnCurrentNode; } }
         private Stack<IEnumerator<SceneNodeContainer>> _nodeEnumeratorStack;
         private IEnumerator<SceneNodeContainer> _curNodeEnumerator;
         private IEnumerator<SceneComponentContainer> _curCompEnumerator;
@@ -312,24 +312,30 @@ namespace Fusee.Xene
                         }
                     }
                     CurrentNode = _curNodeEnumerator.Current;
-                    PushState();
-
-                    // Prepare to traverse children
-                    if (CurrentNode.Children != null)
+                    if (CurrentNode.Visible)
                     {
-                        var childEnumerator = CurrentNode.Children.GetEnumerator();
-                        _nodeEnumeratorStack.Push(_curNodeEnumerator);
-                        _curNodeEnumerator = childEnumerator;
-                    }
+                        PushState();
 
-                    // Prepare to traverse components
-                    if (CurrentNode.Components != null)
-                    {
-                        _curCompEnumerator = CurrentNode.Components.GetEnumerator();
-                    }
+                        // Prepare to traverse children
+                        if (CurrentNode.Children != null)
+                        {
+                            var childEnumerator = CurrentNode.Children.GetEnumerator();
+                            _nodeEnumeratorStack.Push(_curNodeEnumerator);
+                            _curNodeEnumerator = childEnumerator;
+                        }
 
-                    // Traverse nodes
-                    DoVisitNode(CurrentNode);
+                        // Prepare to traverse components
+                        if (CurrentNode.Components != null)
+                        {
+                            _curCompEnumerator = CurrentNode.Components.GetEnumerator();
+                        }
+
+                        // Traverse nodes
+
+
+                        DoVisitNode(CurrentNode);
+
+                    }
 
                     if (YieldOnCurrentNode)
                         return true;
@@ -372,24 +378,30 @@ namespace Fusee.Xene
                     }
                 }
                 CurrentNode = _curNodeEnumerator.Current;
-                PushState();
-
-                // Prepare to traverse children
-                if (CurrentNode.Children != null)
+                if (CurrentNode.Visible)
                 {
-                    var childEnumerator = CurrentNode.Children.GetEnumerator();
-                    _nodeEnumeratorStack.Push(_curNodeEnumerator);
-                    _curNodeEnumerator = childEnumerator;
+                    PushState();
+
+                    // Prepare to traverse children
+                    if (CurrentNode.Children != null)
+                    {
+                        var childEnumerator = CurrentNode.Children.GetEnumerator();
+                        _nodeEnumeratorStack.Push(_curNodeEnumerator);
+                        _curNodeEnumerator = childEnumerator;
+                    }
+
+                    // Traverse nodes
+
+
+
+                    DoVisitNode(CurrentNode);
+
+
+                    // If this node hasn't any children, PopState right now. 
+                    // Otherwise PopState will be called after traversing the children list (see while statement above).
+                    if (CurrentNode.Children == null)
+                        PopState();
                 }
-
-                // Traverse nodes
-                DoVisitNode(CurrentNode);
-
-                // If this node hasn't any children, PopState right now. 
-                // Otherwise PopState will be called after traversing the children list (see while statement above).
-                if (CurrentNode.Children == null)
-                    PopState();
-
                 if (YieldOnCurrentNode)
                     return true;
             }
@@ -402,14 +414,14 @@ namespace Fusee.Xene
         /// </summary>
         private void ScanForVisitors()
         {
-            if (_visitors != null) 
+            if (_visitors != null)
                 return;
 
             if (_visitorMap == null)
                 _visitorMap = new Dictionary<Type, VisitorSet>();
 
             Type myType = GetType();
-            if (_visitorMap.TryGetValue(myType, out _visitors)) 
+            if (_visitorMap.TryGetValue(myType, out _visitors))
                 return;
 
             _visitors = new VisitorSet();
@@ -419,7 +431,7 @@ namespace Fusee.Xene
                     continue;
 
                 ParameterInfo[] parameters = methodInfo.GetParameters();
-                if (parameters.Length != 1) 
+                if (parameters.Length != 1)
                     continue;
 
                 Type paramType = parameters[0].ParameterType;
@@ -467,44 +479,59 @@ namespace Fusee.Xene
             return (a != null && a.Length > 0);
         }
 
- 
+
         private void DoTraverseNoComponents(SceneNodeContainer node)
         {
             CurrentNode = node;
-            PushState();
 
-            DoVisitNode(node);
 
-            // DO NOT visit components
-
-            if (node.Children != null)
+            if (CurrentNode.Visible)
             {
-                foreach (var child in node.Children)
+                PushState();
+
+                DoVisitNode(node);
+
+                // DO NOT visit components
+
+                if (node.Children != null)
                 {
-                    DoTraverseNoComponents(child);
+                    foreach (var child in node.Children)
+                    {
+                        DoTraverseNoComponents(child);
+                    }
                 }
+                PopState();
             }
-            PopState();
+
+            
             CurrentNode = null;
         }
 
         private void DoTraverse(SceneNodeContainer node)
         {
             CurrentNode = node;
-            PushState();
-            
-            DoVisitNode(node);
 
-            DoVisitComponents(node);
-
-            if (node.Children != null)
+            if (CurrentNode.Visible)
             {
-                foreach (var child in node.Children)
+                PushState();
+
+                DoVisitNode(node);
+
+                DoVisitComponents(node);
+
+                if (node.Children != null)
                 {
-                    DoTraverse(child);
+                    foreach (var child in node.Children)
+                    {
+                        DoTraverse(child);
+                    }
                 }
+                PopState();
             }
-            PopState();
+           
+
+
+
             CurrentNode = null;
         }
 
